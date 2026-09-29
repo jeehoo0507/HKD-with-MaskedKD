@@ -58,19 +58,52 @@
 또한 마스킹 효과가 2단계까지 전달되는지를 측정합니다. CNN 보조 교사의 2단계 연산을
 마스킹으로 줄이는 실험은 아닙니다. 무작위 마스크 대조군은 이번 최소 비교에 포함하지 않았습니다.
 
-실행 환경은 Python 3.12와 NVIDIA CUDA GPU를 기준으로 합니다.
-[PyTorch의 버전별 설치 안내](https://pytorch.org/get-started/previous-versions/)에서 GPU/드라이버에 맞는 빌드를 선택하세요.
-Linux에서 CUDA 12.6 빌드를 사용할 수 있는 환경의 설치 예시는 다음과 같습니다.
+**직접 설치할 도구는 uv(0.9 이상)뿐입니다.** Python·패키지는 uv가 관리합니다.
+Linux x86_64의 NVIDIA GPU 학습과 macOS Apple Silicon의 CPU 검증을 지원합니다.
+클론에 사용하는 Git/Bash와 학습 머신의 NVIDIA 드라이버는 이미 제공된 환경을 사용합니다.
+시스템 Python, pip, Conda, 별도의 CUDA Toolkit 설치는 필요 없습니다.
+
+아래 명령은 저장소 루트에서 실행합니다. `./uv.sh`는 설치 도구가 아니라 **경로를 격리한 uv 실행 wrapper**입니다.
+환경 변수는 자식 프로세스에만 적용하며 shell profile이나 전역 PATH를 수정하지 않습니다.
+`uv`를 직접 실행하면 기본 전역 캐시를 사용할 수 있으므로 이 프로젝트에서는 `./uv.sh`를 사용하세요.
+스크립트를 `source`하지 않고 실행해야 합니다.
+
+새로 시작할 때:
 
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install torch==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu126
-python -m pip install -r requirements.txt
-python -m pip install 'pytest>=8,<9'
-python run_experiment.py smoke
-python -m pytest -q
+git clone https://github.com/jeehoo0507/hkd-maskedkd.git
+cd hkd-maskedkd
+./uv.sh sync --locked
+./uv.sh run --locked python scripts/check_isolation.py
+./uv.sh run --locked python run_experiment.py smoke
+./uv.sh run --locked python -m pytest -q
 ```
+
+`pyproject.toml`과 커밋된 `uv.lock`으로 의존성을 고정합니다.
+Python 3.12.12도 uv가 프로젝트 내부에 내려받습니다. Linux에서는 CUDA 12.6 PyTorch wheel을,
+macOS에서는 macOS wheel을 선택합니다. 소스 빌드는 금지하므로 추가 컴파일러를 설치하지 않습니다.
+GPU/드라이버가 이 CUDA wheel을 지원해야 실제 학습이 가능합니다.
+[uv의 PyTorch 설정](https://docs.astral.sh/uv/guides/integration/pytorch/)을 사용합니다.
+
+저장 위치는 모두 클론한 폴더 아래입니다.
+
+| 위치 | 내용 |
+|---|---|
+| `.venv/` | Python 패키지와 CUDA wheel 의존성 |
+| `.local/python/` | uv가 설치한 Python 런타임 |
+| `.local/uv-cache/`, `.local/python-cache/` | uv 패키지 및 Python 다운로드 캐시 |
+| `.local/cache/` | PyTorch·Hugging Face·CUDA·Triton·Python bytecode 캐시 |
+| `.local/tmp/` | 설치·실행 중 임시 파일 |
+| `checkpoints/` | DeiT-B 다운로드 가중치 |
+| `external/` | 데이터 준비용 reference 저장소 |
+| `data/`, `outputs/` | 데이터와 실험 결과 |
+
+`check_isolation.py`는 실제 Python 런타임, 가상환경, 임시 경로, 라이브러리 캐시가
+프로젝트 안을 가리키는지 검사합니다. 기존의 다른 Python으로 만든 `.venv`가 있으면
+그 **프로젝트 내부 `.venv`만** 이름을 바꿔 보관한 뒤 `./uv.sh sync --locked`를 다시 실행하세요.
+기존 전역 Python과 다른 프로젝트의 환경은 건드리지 않습니다.
+[uv 저장 경로](https://docs.astral.sh/uv/reference/storage/)와
+[환경 변수](https://docs.astral.sh/uv/reference/environment/)로 격리합니다.
 
 이미 준비된 benchmark 데이터가 있으면 그 경로를 그대로 사용하세요.
 없으면 아래 명령으로 **고정된 reference 버전의 준비 스크립트**를 가져와 실행할 수 있습니다.
@@ -78,10 +111,14 @@ python -m pytest -q
 
 ```bash
 bash scripts/prepare_reference.sh
-bash external/benchmarks/datasets/coco_single/setup.sh
-python external/benchmarks/scripts/check_assets.py coco external/benchmarks/data/coco_single --full
-python run_experiment.py fetch-teacher
+./uv.sh run --locked python scripts/prepare_data.py
+./uv.sh run --locked python external/benchmarks/scripts/check_assets.py coco data/coco_single --full
+./uv.sh run --locked python run_experiment.py fetch-teacher
 ```
+
+원본 `setup.sh`는 실행하지 않습니다. 프로젝트의 `prepare_data.py`가 Python 표준 라이브러리로
+annotation을 다운로드한 후 원본의 split/selection 함수를 실행합니다. 별도 pip 환경이나 curl 설치가 필요 없습니다.
+다운로드가 끊기면 같은 명령을 다시 실행하면 됩니다. 아직 없는 이미지와 annotation 부분 파일을 재사용합니다.
 
 데이터는 기존 manifest 그대로 train 3,210 / validation 530 / test 297을 사용합니다.
 클래스 순서, split seed, 이미지 수가 다르면 중단합니다. 재분할·부분 집합 추출은 하지 않습니다.
@@ -91,8 +128,8 @@ python run_experiment.py fetch-teacher
 기본 실행은 다음 한 명령입니다. `--data`를 실제 준비된 경로로 변경하세요.
 
 ```bash
-python run_experiment.py run \
-  --data external/benchmarks/data/coco_single \
+./uv.sh run --locked python run_experiment.py run \
+  --data data/coco_single \
   --output outputs/pilot-seed0 \
   --hours 4 --vram-gb 3 --seed 0
 ```
@@ -102,6 +139,12 @@ python run_experiment.py run \
 조건 실행 순서는 epoch마다 뒤집어서 실행 순서의 영향을 줄입니다.
 시간은 기본 4시간, `--hours 3`~`--hours 5`로 바꿀 수 있습니다.
 측정만 할 때는 새 output 경로와 `--plan-only`를 사용하세요.
+
+```bash
+./uv.sh run --locked python run_experiment.py run \
+  --data data/coco_single --output outputs/profile \
+  --hours 4 --vram-gb 3 --plan-only
+```
 
 프로파일과 학습 예산은 다음 방식으로 결정합니다.
 
@@ -146,5 +189,11 @@ branch 속도비에서 제외하고, 사전 측정을 포함한 전체 wall time
 checkpoint는 보존하지만 이 최소 runner에는 자동 resume CLI가 없습니다.
 기존 output 폴더를 덮어쓰지 않으며, 재실행에는 새 폴더가 필요합니다.
 
+완전히 제거하려면 실행 중인 학습을 종료한 뒤 **클론한 폴더 전체를 삭제**하면 됩니다.
+이 프로젝트가 설치한 Python·패키지·캐시·다운로드·결과가 함께 삭제됩니다.
+전역에 원래 설치된 uv와 OS의 Git/드라이버는 남으며 변경하지 않습니다.
+사용자가 별도로 지정한 외부 데이터 경로는 삭제 대상이 아닙니다.
+
 구현 위치: `hkd/core.py`(모델·손실·토큰 제거), `hkd/data.py`(manifest·paired augmentation),
-`run_experiment.py`(프로파일·학습·결과), `tests/`(수식·단계별 학습·비교 조건 검증).
+`run_experiment.py`(프로파일·학습·결과), `tests/`(수식·단계별 학습·비교 조건 검증),
+`uv.sh`(실행 경로 격리), `scripts/prepare_data.py`(uv 환경에서 데이터 준비).

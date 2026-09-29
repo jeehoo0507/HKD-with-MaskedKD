@@ -140,8 +140,10 @@ def evaluate(model, batches, device, budget=None):
 
 
 def fetch_teacher():
-    torch.hub.load_state_dict_from_url(TEACHER_URL, map_location="cpu", check_hash=True, weights_only=True)
-    path = Path(torch.hub.get_dir()) / "checkpoints" / TEACHER_URL.rsplit("/", 1)[-1]
+    directory = Path(__file__).resolve().parent / "checkpoints"
+    torch.hub.load_state_dict_from_url(TEACHER_URL, model_dir=str(directory), map_location="cpu",
+                                        check_hash=True, weights_only=True)
+    path = directory / TEACHER_URL.rsplit("/", 1)[-1]
     if not sha256_file(path).startswith("b5f2ef4d"):
         raise RuntimeError(f"Invalid teacher checksum: {path}")
     return path
