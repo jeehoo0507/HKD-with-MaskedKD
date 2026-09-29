@@ -71,8 +71,8 @@ Linux x86_64의 NVIDIA GPU 학습과 macOS Apple Silicon의 CPU 검증을 지원
 새로 시작할 때:
 
 ```bash
-git clone https://github.com/jeehoo0507/hkd-maskedkd.git
-cd hkd-maskedkd
+git clone https://github.com/jeehoo0507/HKD-with-MaskedKD.git
+cd HKD-with-MaskedKD
 ./uv.sh sync --locked
 ./uv.sh run --locked python scripts/check_isolation.py
 ./uv.sh run --locked python run_experiment.py smoke
